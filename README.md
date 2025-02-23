@@ -65,6 +65,24 @@ Ouroboros Noosphere creates a network of autonomous recursive minds that engage 
 ### Setup
 
 1. Clone the repository:
+<<<<<<< HEAD
+=======
+   ```bash
+   git clone https://github.com/redx94/ouroboros-noosphere.git
+   cd ouroboros-noosphere
+   ```
+
+2. (Optional) Create a virtual environment and install dependencies:
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+### Running the Prototype
+
+To run the simulation:
+>>>>>>> 30a791ee5032867d724ed02dab2e3ae8c34be208
 ```bash
 git clone https://github.com/redx94/ouroboros-noosphere.git
 cd ouroboros-noosphere
@@ -372,6 +390,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Future Enhancements
 
+<<<<<<< HEAD
 - [ ] Implement quantum-resistant encryption
 - [ ] Add distributed training for RL agents
 - [ ] Integrate with external knowledge bases
@@ -382,3 +401,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Support
 
 For support or questions, please open an issue in the GitHub repository.
+=======
+- Upgrade from placeholder homomorphic encryption to a robust library.
+- Scale the network using container orchestration (Docker/Kubernetes).
+- Integrate reinforcement learning for adaptive adversarial and observer modules.
+- Visualize the evolving ontological state with graph databases (e.g., Neo4j).
+>>>>>>> 30a791ee5032867d724ed02dab2e3ae8c34be208
