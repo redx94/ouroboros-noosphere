@@ -1,84 +1,100 @@
+import plotly.graph_objects as go
+import plotly.express as px
 import networkx as nx
-import matplotlib.pyplot as plt
-from typing import Dict, Any
-import numpy as np
+import pandas as pd
+from typing import Dict, List, Any
+import asyncio
+import logging
 
 class NetworkVisualizer:
     def __init__(self):
-        self.figure, self.ax = plt.subplots(figsize=(12, 8))
+        self.fig_network = go.Figure()
+        self.fig_ethics = go.Figure()
+        self.update_interval = 1.0  # seconds
         
-    def plot_ontology_graph(self, graph: nx.DiGraph) -> None:
-        """Plot the current state of the ontology graph"""
-        self.ax.clear()
-        pos = nx.spring_layout(graph)
+    def update_network_graph(self, G: nx.Graph):
+        """Update network graph visualization"""
+        pos = nx.spring_layout(G)
         
-        # Draw nodes with colors based on state
-        states = nx.get_node_attributes(graph, 'state')
-        colors = [self._get_state_color(state) for state in states.values()]
+        # Extract node positions
+        node_x = [pos[node][0] for node in G.nodes()]
+        node_y = [pos[node][1] for node in G.nodes()]
         
-        nx.draw_networkx_nodes(graph, pos, node_color=colors, alpha=0.6)
-        nx.draw_networkx_edges(graph, pos, alpha=0.3)
-        nx.draw_networkx_labels(graph, pos)
+        # Extract edge positions
+        edge_x = []
+        edge_y = []
+        for edge in G.edges():
+            x0, y0 = pos[edge[0]]
+            x1, y1 = pos[edge[1]]
+            edge_x.extend([x0, x1, None])
+            edge_y.extend([y0, y1, None])
+            
+        # Create edges trace
+        edge_trace = go.Scatter(
+            x=edge_x, y=edge_y,
+            line=dict(width=0.5, color='#888'),
+            hoverinfo='none',
+            mode='lines')
+            
+        # Create nodes trace
+        node_trace = go.Scatter(
+            x=node_x, y=node_y,
+            mode='markers+text',
+            hoverinfo='text',
+            marker=dict(
+                size=10,
+                color=[G.nodes[node].get('trust_score', 0.5) for node in G.nodes()],
+                colorscale='Viridis',
+                showscale=True
+            ),
+            text=[f"Node {node}" for node in G.nodes()],
+            textposition="top center"
+        )
         
-        plt.title("Ouroboros Network State")
-        plt.pause(0.1)  # For interactive updates
+        self.fig_network = go.Figure(data=[edge_trace, node_trace],
+             layout=go.Layout(
+                title='Network Trust Graph',
+                showlegend=False,
+                hovermode='closest',
+                margin=dict(b=20,l=5,r=5,t=40),
+                xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
+            ))
+            
+    def update_ethics_distribution(self, nodes_data: List[Dict[str, Any]]):
+        """Update ethics distribution visualization"""
+        df = pd.DataFrame([
+            {
+                'node': f"Node {node['id']}",
+                'domain': domain,
+                'weight': weight
+            }
+            for node in nodes_data
+            for domain, weight in node['ethical_weights'].items()
+        ])
         
-    def plot_ethical_weights(self, nodes: List[Any]) -> None:
-        """Plot ethical weights distribution across nodes"""
-        self.ax.clear()
-        weights = [node.ethical_weights for node in nodes]
+        self.fig_ethics = px.bar(df, 
+            x='node', 
+            y='weight', 
+            color='domain',
+            title='Ethical Weight Distribution',
+            barmode='stack'
+        )
         
-        data = np.array([[w[k] for k in ['utilitarian', 'deontological', 'virtue']] 
-                        for w in weights])
-        
-        self.ax.boxplot(data, labels=['Utilitarian', 'Deontological', 'Virtue'])
-        plt.title("Ethical Weights Distribution")
-        plt.ylabel("Weight Value")
-        plt.pause(0.1)
-        
-    def plot_network_metrics(self, metrics_collector) -> None:
-        """Plot historical network metrics"""
-        self.ax.clear()
-        
-        # Extract metrics
-        timestamps = [m.timestamp for m in metrics_collector.metrics_history]
-        health_scores = [
-            metrics_collector.get_network_health() 
-            for _ in range(len(metrics_collector.metrics_history))
-        ]
-        
-        # Plot network health over time
-        self.ax.plot(timestamps, health_scores, label='Network Health', color='blue')
-        
-        # Add ethical balance distribution
-        ethical_balances = [m.ethical_balance for m in metrics_collector.metrics_history]
-        self.ax.plot(timestamps, ethical_balances, label='Ethical Balance', color='red', alpha=0.5)
-        
-        plt.title("Network Health and Ethical Balance Over Time")
-        plt.xlabel("Time")
-        plt.ylabel("Score")
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        plt.pause(0.1)
-
-    def plot_recursive_depth_distribution(self, nodes) -> None:
-        """Plot distribution of recursion depths across nodes"""
-        self.ax.clear()
-        depths = [node.recursion_depth for node in nodes]
-        
-        plt.hist(depths, bins='auto', alpha=0.7, color='green')
-        plt.title("Distribution of Recursion Depths")
-        plt.xlabel("Recursion Depth")
-        plt.ylabel("Number of Nodes")
-        plt.pause(0.1)
-        
-    @staticmethod
-    def _get_state_color(state: str) -> str:
-        """Map node states to colors"""
-        colors = {
-            'ACTIVE_RECURSION': 'green',
-            'NEURAL_ANNEALING': 'blue',
-            'ETHICAL_CRISIS': 'red',
-            'OBSERVATIONAL_FREEZE': 'yellow'
+    async def start_visualization_loop(self, get_network_state):
+        """Start continuous visualization updates"""
+        while True:
+            try:
+                network_state = await get_network_state()
+                self.update_network_graph(network_state['trust_graph'])
+                self.update_ethics_distribution(network_state['nodes'])
+            except Exception as e:
+                logging.error(f"Visualization update error: {e}")
+            await asyncio.sleep(self.update_interval)
+            
+    def get_figures(self):
+        """Get current figure objects"""
+        return {
+            'network': self.fig_network,
+            'ethics': self.fig_ethics
         }
-        return colors.get(state, 'gray')

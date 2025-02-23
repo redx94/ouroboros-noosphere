@@ -32,8 +32,24 @@ class Config:
                     'textColor': '#FAFAFA',
                     'font': 'sans serif'
                 }
+            },
+            'ADVERSARY_INTERVAL': int(os.getenv('ADVERSARY_INTERVAL', '7')),
+            'OBSERVER_INTERVAL': int(os.getenv('OBSERVER_INTERVAL', '3')),
+            'MAX_MEMORY_SIZE': int(os.getenv('MAX_MEMORY_SIZE', '1000')),
+            'MEMORY_CLEANUP_INTERVAL': int(os.getenv('MEMORY_CLEANUP_INTERVAL', '60')),
+            'ETHICAL_DOMAINS': {
+                'utilitarian': float(os.getenv('WEIGHT_UTILITARIAN', '0.33')),
+                'deontological': float(os.getenv('WEIGHT_DEONTOLOGICAL', '0.33')),
+                'virtue': float(os.getenv('WEIGHT_VIRTUE', '0.34'))
             }
         }
+        self.validate()
+
+    def validate(self):
+        """Validate configuration parameters"""
+        assert sum(self.config['ETHICAL_DOMAINS'].values()) == 1.0, "Ethical weights must sum to 1.0"
+        assert self.config['NODE_COUNT'] > 0, "Node count must be positive"
+        assert self.config['RECURSION_LIMIT'] > 0, "Recursion limit must be positive"
 
     def get(self, key: str) -> Any:
         """Get a configuration value."""

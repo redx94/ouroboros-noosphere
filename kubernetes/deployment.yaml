@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ouroboros-noosphere
+  namespace: cosmic-noosphere
+spec:
+  replicas: 10
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: ouroboros-noosphere
+  template:
+    metadata:
+      labels:
+        app: ouroboros-noosphere
+    spec:
+      nodeSelector:
+        cosmic: "true"
+      containers:
+      - name: ouroboros
+        image: redx94/ouroboros-noosphere:latest
+        imagePullPolicy: Always
+        resources:
+          requests:
+            cpu: "2000m"
+            memory: "4Gi"
+          limits:
+            cpu: "2000m"
+            memory: "4Gi"
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
