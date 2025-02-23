@@ -30,19 +30,10 @@ async def main():
     observer_task = asyncio.create_task(observer_module(nodes))
 
     # Run all tasks concurrently
-    tasks = node_tasks + adversary_tasks + [consensus_task, observer_task]
-    try:
-        await asyncio.gather(*tasks)
-    except asyncio.CancelledError:
-        logging.info("Tasks cancelled. Shutting down simulation.")
-    except Exception as e:
-        logging.error(f"An error occurred: {e}")
-    finally:
-        for task in tasks:
-            task.cancel()
+    await asyncio.gather(*node_tasks, consensus_task, observer_task, *adversary_tasks)
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logging.info("Simulation terminated by user.")
+        print("\nSimulation terminated by user.")
