@@ -118,6 +118,207 @@ CONSENSUS_INTERVAL = 5
 OBSERVER_INTERVAL = 3
 ```
 
+## Detailed Usage Guide
+
+### Local Development Setup
+
+1. **Environment Setup**
+   ```bash
+   # Create and activate virtual environment
+   python -m venv venv
+   source venv/bin/activate  # Linux/Mac
+   # or
+   .\venv\Scripts\activate   # Windows
+
+   # Install dependencies
+   pip install -r requirements.txt
+
+   # Create .env file
+   cp .env.example .env
+   ```
+
+2. **Configuration**
+   Edit `.env` file with your settings:
+   ```env
+   NODE_COUNT=3
+   RECURSION_LIMIT=100
+   ENCRYPTION_P=65537
+   ENCRYPTION_M=2048
+   ENCRYPTION_SEC=128
+   API_HOST=localhost
+   API_PORT=8000
+   DEBUG=True
+   ```
+
+### Running the System
+
+1. **Start the API Server**
+   ```bash
+   uvicorn src.api:app --reload --port 8000
+   ```
+
+2. **Launch Streamlit Interface**
+   ```bash
+   streamlit run src/app.py
+   ```
+
+3. **Start Monitoring Stack**
+   ```bash
+   docker-compose up prometheus grafana
+   ```
+
+### Using the Interface
+
+1. **Network Initialization**
+   - Access Streamlit UI at `http://localhost:8501`
+   - Use sidebar to set number of nodes
+   - Click "Initialize Network" to create nodes
+
+2. **Network Monitoring**
+   - View real-time network visualization
+   - Monitor node states and ethical weights
+   - Track recursion depths and memory sizes
+
+3. **Metrics Dashboard**
+   - Access Grafana at `http://localhost:3000`
+   - Default credentials: admin/admin
+   - View predefined dashboards:
+     - Node Performance
+     - Network Health
+     - Ethical Weight Distribution
+
+### API Usage
+
+1. **WebSocket Connection**
+   ```python
+   import websockets
+   import asyncio
+
+   async def connect():
+       uri = "ws://localhost:8000/ws"
+       async with websockets.connect(uri) as websocket:
+           while True:
+               data = await websocket.recv()
+               print(f"Received: {data}")
+
+   asyncio.get_event_loop().run_until_complete(connect())
+   ```
+
+2. **REST API Endpoints**
+   ```bash
+   # Get network status
+   curl http://localhost:8000/network/status
+
+   # Create new node
+   curl -X POST http://localhost:8000/node/create \
+        -H "Content-Type: application/json" \
+        -d '{"domain": "custom_domain"}'
+
+   # Apply influence to node
+   curl -X POST http://localhost:8000/node/0/influence \
+        -H "Content-Type: application/json" \
+        -d '{"utilitarian": 0.1, "deontological": -0.1}'
+
+   # Get metrics
+   curl http://localhost:8000/metrics
+   ```
+
+### Docker Deployment
+
+1. **Build and Run**
+   ```bash
+   # Build all services
+   docker-compose build
+
+   # Run entire stack
+   docker-compose up -d
+
+   # View logs
+   docker-compose logs -f
+   ```
+
+2. **Scaling**
+   ```bash
+   # Scale to more nodes
+   docker-compose up -d --scale app=3
+   ```
+
+### Advanced Usage
+
+1. **Custom Node Configuration**
+   ```python
+   from src.ouroboros_node import OuroborosNode
+   from src.config import Config
+
+   # Create custom config
+   config = Config()
+   config.update('RECURSION_LIMIT', 200)
+   
+   # Initialize node with custom domain
+   node = OuroborosNode(0, "philosophy", config)
+   ```
+
+2. **Ethical Weight Manipulation**
+   ```python
+   # Adjust ethical weights
+   node.ethical_weights = {
+       'utilitarian': 0.4,
+       'deontological': 0.3,
+       'virtue': 0.3
+   }
+   ```
+
+3. **Custom Metrics Collection**
+   ```python
+   from src.metrics_collector import MetricsCollector
+
+   metrics = MetricsCollector()
+   
+   # Track custom event
+   metrics.track_custom_event('interaction', {
+       'node_id': 1,
+       'type': 'knowledge_transfer',
+       'success': True
+   })
+   ```
+
+### Troubleshooting
+
+1. **Common Issues**
+   - Port conflicts: Change ports in docker-compose.yml
+   - Memory errors: Adjust Docker resources
+   - Connection refused: Check service health
+
+2. **Debug Mode**
+   ```bash
+   # Enable debug logging
+   export DEBUG=True
+   
+   # Run with verbose output
+   python -m src.main --verbose
+   ```
+
+3. **Health Checks**
+   ```bash
+   # Check API health
+   curl http://localhost:8000/health
+
+   # Verify Prometheus targets
+   curl http://localhost:9090/targets
+   ```
+
+### Performance Optimization
+
+1. **Memory Management**
+   - Adjust `maxlen` of conceptual_memory in OuroborosNode
+   - Configure garbage collection intervals
+   - Monitor memory usage through metrics
+
+2. **Network Optimization**
+   - Tune consensus intervals
+   - Adjust WebSocket broadcast frequency
+   - Optimize node connection topology
+
 ## Development
 
 ### Project Structure
