@@ -7,6 +7,9 @@ from enum import Enum
 from typing import Dict, Any
 
 import logging
+from pyfhel import Pyfhel
+from config import ENCRYPTION_PARAMS, RECURSION_LIMIT
+from zkp import ZKPVerifier
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
@@ -29,6 +32,15 @@ class OuroborosNode:
         self.recursive_karma = 1.0
         self.state = MindState.ACTIVE_RECURSION
         self.recursion_depth = 0
+        self.he = self._init_encryption_context()
+        self.message_queue = None
+        self.zkp_verifier = ZKPVerifier()
+
+    def _init_encryption_context(self) -> Pyfhel:
+        he = Pyfhel()
+        he.contextGen(p=ENCRYPTION_PARAMS["p"], m=ENCRYPTION_PARAMS["m"], sec=ENCRYPTION_PARAMS["sec"])
+        he.keyGen()
+        return he
 
     def generate_insight(self) -> str:
         """
@@ -44,24 +56,69 @@ class OuroborosNode:
 
     def encrypt_state(self) -> Dict[str, Any]:
         """
-        Simulate homomorphic encryption on the node's conceptual memory.
-        Returns:
-            A dictionary containing the encrypted state, encryption key, and a timestamp.
+        Encrypt the conceptual memory using Pyfhel.
         """
         state_snapshot = "||".join(self.conceptual_memory)
-        key = secrets.token_hex(16)
-        encrypted = ''.join(chr((ord(c) + 3) % 256) for c in state_snapshot)
-        return {'encrypted_state': encrypted, 'key': key, 'timestamp': time.time()}
+        try:
+            numeric_state = abs(hash(state_snapshot)) % 100000
+            enc_state = self.he.encryptFrac(float(numeric_state))
+            return {'encrypted_state': enc_state.to_bytes(), 'timestamp': time.time()}
+        except Exception as e:
+            logging.error(f"Encryption failed for Node {self.node_id}: {e}")
+            return {'encrypted_state': None, 'timestamp': time.time()}
+
+    def get_verifiable_state(self) -> Dict[str, Any]:
+        """
+        Get a verifiable snapshot of the node's state for consensus.
+        Returns a dictionary containing state data and ZKP elements.
+        """
+        state = {
+            'node_id': self.node_id,
+            'recursion_depth': self.recursion_depth,
+            'ethical_weights': self.ethical_weights.copy(),
+            'state': self.state.name
+        }
+        challenge, nonce = self.zkp_verifier.generate_challenge(state)
+        proof = self.zkp_verifier.create_proof(state, nonce)
+        
+        return {
+            'state': state,
+            'proof': proof,
+            'challenge': challenge
+        }
+
+    async def process_messages(self):
+        """Process incoming messages from other nodes."""
+        while True:
+            if self.message_queue:
+                message = await self.message_queue.get()
+                await self._handle_message(message)
+            await asyncio.sleep(0.1)
+
+    async def _handle_message(self, message: str):
+        """Handle an incoming message."""
+        try:
+            data = json.loads(message)
+            if data['topic'] == 'consensus':
+                logging.info(f"Node {self.node_id} received consensus message")
+                # Handle consensus message
+            elif data['topic'] == 'influence':
+                # Handle influence message
+                if 'influence' in data['payload']:
+                    self.apply_observer_influence(data['payload']['influence'])
+        except Exception as e:
+            logging.error(f"Error processing message in Node {self.node_id}: {e}")
 
     async def run(self) -> None:
-        """
-        Asynchronous run loop for the Ouroboros node.
-        Continues generating insights until a preset recursion limit is reached.
-        """
-        while self.recursion_depth < 100:  # Simulation limit for prototyping.
-            if self.state == MindState.ACTIVE_RECURSION:
-                self.generate_insight()
-            await asyncio.sleep(random.uniform(0.2, 0.5))  # Simulate variable processing time
+        """Run the node's main loop with message processing."""
+        message_task = asyncio.create_task(self.process_messages())
+        try:
+            while self.recursion_depth < RECURSION_LIMIT:
+                if self.state == MindState.ACTIVE_RECURSION:
+                    self.generate_insight()
+                await asyncio.sleep(random.uniform(0.2, 0.5))
+        finally:
+            message_task.cancel()
 
     def apply_observer_influence(self, influence: Dict[str, float]) -> None:
         """

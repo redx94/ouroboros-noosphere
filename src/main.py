@@ -1,11 +1,11 @@
 import asyncio
 import random
 import logging
-
+from config import NODE_COUNT
 from ouroboros_node import OuroborosNode
-from adversary import adversarial_agent
-from observer import observer_module
-from consensus import consensus_synchronization
+from rl_agent import RLAgent
+from metrics import MetricsCollector
+from monitor import NetworkMonitor
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
@@ -15,25 +15,39 @@ async def main():
     Creates nodes with diverse domain seeds, schedules adversarial, observer,
     and consensus tasks, and runs everything concurrently.
     """
-    # Create a network of Ouroboros nodes with diverse domain seeds
+    domains = ['deontological', 'utilitarian', 'virtue']
     nodes = [
-        OuroborosNode(node_id=i, domain_seed=random.choice(['deontological', 'utilitarian', 'virtue']))
-        for i in range(3)
+        OuroborosNode(node_id=i, domain_seed=random.choice(domains))
+        for i in range(NODE_COUNT)
     ]
 
-    # Schedule node tasks
-    node_tasks = [asyncio.create_task(node.run()) for node in nodes]
-    # Schedule adversarial agents for each node
-    adversary_tasks = [asyncio.create_task(adversarial_agent(node)) for node in nodes]
-    # Schedule consensus synchronization and observer modules
-    consensus_task = asyncio.create_task(consensus_synchronization(nodes))
-    observer_task = asyncio.create_task(observer_module(nodes))
+    rl_agent = RLAgent()
 
-    # Run all tasks concurrently
-    await asyncio.gather(*node_tasks, consensus_task, observer_task, *adversary_tasks)
+    # Initialize metrics and monitoring
+    metrics_collector = MetricsCollector()
+    network_monitor = NetworkMonitor(nodes, metrics_collector)
+
+    node_tasks = [asyncio.create_task(node.run()) for node in nodes]
+    adversary_tasks = [asyncio.create_task(adversarial_agent(node, rl_agent)) for node in nodes]
+    consensus_task = asyncio.create_task(consensus_synchronization(nodes))
+    observer_task = asyncio.create_task(observer_module(nodes, rl_agent))
+    
+    # Add monitoring task
+    monitor_task = asyncio.create_task(network_monitor.monitor_network())
+
+    tasks = node_tasks + adversary_tasks + [consensus_task, observer_task, monitor_task]
+    try:
+        await asyncio.gather(*tasks)
+    except asyncio.CancelledError:
+        logging.info("Tasks cancelled. Shutting down simulation.")
+    except Exception as e:
+        logging.error(f"An error occurred: {e}")
+    finally:
+        for task in tasks:
+            task.cancel()
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\nSimulation terminated by user.")
+        logging.info("Simulation terminated by user.")
