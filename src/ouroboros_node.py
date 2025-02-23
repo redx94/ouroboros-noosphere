@@ -4,7 +4,10 @@ import secrets
 import time
 from collections import deque
 from enum import Enum
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
+import json
+import numpy as np
+import networkx as nx
 
 import logging
 from pyfhel import Pyfhel
@@ -35,6 +38,9 @@ class OuroborosNode:
         self.he = self._init_encryption_context()
         self.message_queue = None
         self.zkp_verifier = ZKPVerifier()
+        self.consensus_state = {}
+        self.peers = []
+        self.trust_graph = nx.DiGraph()
 
     def _init_encryption_context(self) -> Pyfhel:
         he = Pyfhel()
@@ -109,16 +115,94 @@ class OuroborosNode:
         except Exception as e:
             logging.error(f"Error processing message in Node {self.node_id}: {e}")
 
+    async def participate_in_consensus(self) -> Dict[str, Any]:
+        """Participate in network consensus."""
+        state = self.get_verifiable_state()
+        peer_states = await self._gather_peer_states()
+        
+        # Byzantine fault tolerance check
+        valid_states = self._validate_peer_states(peer_states)
+        if len(valid_states) >= (2 * len(self.peers) // 3):
+            consensus_state = self._compute_consensus(valid_states)
+            self._update_local_state(consensus_state)
+            return consensus_state
+        return None
+
+    def _validate_peer_states(self, peer_states: List[Dict]) -> List[Dict]:
+        """Validate peer states using ZKP verification."""
+        valid_states = []
+        for state in peer_states:
+            if self.zkp_verifier.verify_proof(
+                state['state'],
+                state['proof'],
+                state['challenge']
+            ):
+                valid_states.append(state)
+        return valid_states
+
+    def _compute_consensus(self, valid_states: List[Dict]) -> Dict:
+        """Compute consensus state using weighted trust scores."""
+        consensus = {}
+        weights = self._compute_trust_weights(valid_states)
+        
+        for key in ['ethical_weights', 'recursion_depth']:
+            values = [s['state'][key] for s in valid_states]
+            if isinstance(values[0], dict):
+                consensus[key] = {
+                    k: np.average([v[k] for v in values], weights=weights)
+                    for k in values[0].keys()
+                }
+            else:
+                consensus[key] = np.average(values, weights=weights)
+        
+        return consensus
+
+    def _compute_trust_weights(self, states: List[Dict]) -> List[float]:
+        """Compute trust weights based on historical interactions."""
+        weights = []
+        for state in states:
+            node_id = state['state']['node_id']
+            weight = self.trust_graph.nodes.get(node_id, {}).get('trust_score', 1.0)
+            weights.append(weight)
+        return weights if weights else [1.0] * len(states)
+
+    def update_trust_score(self, node_id: int, interaction_success: bool):
+        """Update trust scores based on interaction outcomes."""
+        if not self.trust_graph.has_node(node_id):
+            self.trust_graph.add_node(node_id, trust_score=1.0)
+        
+        current_score = self.trust_graph.nodes[node_id]['trust_score']
+        delta = 0.1 if interaction_success else -0.2
+        new_score = max(0.1, min(1.0, current_score + delta))
+        self.trust_graph.nodes[node_id]['trust_score'] = new_score
+
     async def run(self) -> None:
-        """Run the node's main loop with message processing."""
+        """Enhanced run loop with consensus participation."""
         message_task = asyncio.create_task(self.process_messages())
+        consensus_task = asyncio.create_task(self._consensus_loop())
+        
         try:
             while self.recursion_depth < RECURSION_LIMIT:
                 if self.state == MindState.ACTIVE_RECURSION:
                     self.generate_insight()
+                    await self._check_ethical_bounds()
                 await asyncio.sleep(random.uniform(0.2, 0.5))
         finally:
             message_task.cancel()
+            consensus_task.cancel()
+
+    async def _consensus_loop(self):
+        """Periodic consensus participation."""
+        while True:
+            await self.participate_in_consensus()
+            await asyncio.sleep(CONSENSUS_INTERVAL)
+
+    async def _check_ethical_bounds(self):
+        """Check if ethical weights are within acceptable bounds."""
+        total_deviation = sum(abs(w - 1/3) for w in self.ethical_weights.values())
+        if total_deviation > 0.5:  # Threshold for ethical crisis
+            self.state = MindState.ETHICAL_CRISIS
+            logging.warning(f"Node {self.node_id} entered ethical crisis state")
 
     def apply_observer_influence(self, influence: Dict[str, float]) -> None:
         """

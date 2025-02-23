@@ -1,33 +1,25 @@
 import hashlib
-import os
-from typing import Tuple, Any
-import logging
+import secrets
+from typing import Dict, Any, Tuple
 
 class ZKPVerifier:
     """
-    Implements a simplified Zero-Knowledge Proof system for verifying node states
-    without revealing the actual state data.
+    Simple Zero-Knowledge Proof implementation using hash-based commitments.
+    This is a basic implementation and should be replaced with a more robust ZKP system in production.
     """
-    def __init__(self):
-        self.salt_length = 32
-        
-    def generate_challenge(self, state: Any) -> Tuple[bytes, bytes]:
-        """Generate a challenge for the prover"""
-        nonce = os.urandom(self.salt_length)
-        challenge = hashlib.sha256(str(state).encode() + nonce).digest()
+    def generate_challenge(self, state: Dict[str, Any]) -> Tuple[str, str]:
+        """Generate a challenge for the given state."""
+        nonce = secrets.token_hex(16)
+        state_str = str(sorted(state.items()))
+        challenge = hashlib.sha256(f"{state_str}{nonce}".encode()).hexdigest()
         return challenge, nonce
-        
-    def create_proof(self, state: Any, nonce: bytes) -> bytes:
-        """Create a proof of state knowledge"""
-        state_hash = hashlib.sha256(str(state).encode()).digest()
-        proof = hashlib.sha512(state_hash + nonce).digest()
-        return proof
-        
-    def verify_proof(self, proof: bytes, challenge: bytes) -> bool:
-        """Verify a state proof against a challenge"""
-        try:
-            verification_hash = hashlib.sha256(proof).digest()
-            return verification_hash[:16] == challenge[:16]
-        except Exception as e:
-            logging.error(f"Proof verification failed: {e}")
-            return False
+
+    def create_proof(self, state: Dict[str, Any], nonce: str) -> str:
+        """Create a proof for the given state and nonce."""
+        state_str = str(sorted(state.items()))
+        return hashlib.sha256(f"{state_str}{nonce}".encode()).hexdigest()
+
+    def verify_proof(self, state: Dict[str, Any], proof: str, nonce: str) -> bool:
+        """Verify the proof against the given state."""
+        expected_proof = self.create_proof(state, nonce)
+        return secrets.compare_digest(proof, expected_proof)
