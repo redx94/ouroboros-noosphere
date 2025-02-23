@@ -24,7 +24,7 @@ This project implements a prototype network of asynchronous Ouroboros nodes, eac
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/ouroboros-noosphere.git
+   git clone https://github.com/redx94/ouroboros-noosphere.git
    cd ouroboros-noosphere
    ```
 
